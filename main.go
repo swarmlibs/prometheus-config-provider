@@ -22,14 +22,16 @@ var (
 )
 
 func main() {
-	var logger log.Logger
-	logger = log.NewLogfmtLogger(os.Stdout)
-
 	app := kingpin.New("dockerswarm-configs-provider", "")
-	logger = log.NewLogfmtLogger(os.Stderr)
 
 	outputDir := app.Flag("output-dir", "directory for the configs").Default("out").String()
 	outputExt := app.Flag("output-ext", "extension for the configs").Default("yaml").String()
+
+	var logger log.Logger
+	logger = log.NewLogfmtLogger(os.Stdout)
+	logger = level.NewFilter(logger, level.AllowAll())
+	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
+	logger = log.With(logger, "caller", log.DefaultCaller)
 
 	if _, err := app.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stdout, err)
@@ -73,7 +75,7 @@ func main() {
 				continue
 			}
 			outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
-			level.Info(logger).Log("msg", "Write config to file", "id", config.ID, "name", config.Spec.Name, "file", outFile)
+			level.Info(logger).Log("msg", "Load triggered", "id", config.ID, "file", outFile)
 			writeConfigToFile(outFile, cfg.Spec.Data)
 		}
 	}
@@ -94,19 +96,30 @@ func main() {
 				switch event.Action {
 				case "create", "update":
 					cfg, _, err := cli.ConfigInspectWithRaw(ctx, event.Actor.ID)
+
 					if err != nil {
 						level.Error(logger).Log("msg", "Failed to read config", "id", event.Actor.ID, "err", err)
 						continue
 					}
+
+					if cfg.Spec.Labels["io.prometheus.scrape_config"] == "" {
+						continue
+					}
+
 					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
+					level.Info(logger).Log("msg", "Event triggered", "type", event.Type, "action", event.Action, "id", event.Actor.ID, "file", outFile)
+
 					writeConfigToFile(outFile, cfg.Spec.Data)
 				case "remove":
 					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, event.Actor.ID, *outputExt)
-					if err := os.Remove(outFile); err != nil {
-						level.Error(logger).Log("msg", "Failed to remove file", "id", event.Actor.ID, "file", outFile, "err", err)
+
+					if _, err := os.Stat(outFile); err == nil {
+						level.Info(logger).Log("msg", "Event triggered", "type", event.Type, "action", event.Action, "id", event.Actor.ID, "file", outFile)
+						if err := os.Remove(outFile); err != nil {
+							level.Error(logger).Log("msg", "Failed to remove file", "id", event.Actor.ID, "file", outFile, "err", err)
+						}
 					}
 				}
-				level.Info(logger).Log("msg", "Event triggered", "type", event.Type, "action", event.Action)
 			case err := <-errCh:
 				level.Error(logger).Log("msg", "Failed to receive Docker events", "err", err)
 			}
