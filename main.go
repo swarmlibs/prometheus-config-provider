@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"os"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
@@ -83,7 +82,7 @@ func main() {
 			level.Info(logger).Log("msg", "Event triggered", "type", "read", "id", config.ID, "file", outFile)
 			writeConfigToFile(outFile, cfg.Spec.Data)
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	// Subscribe to Docker events for configs
@@ -153,8 +152,12 @@ func main() {
 	}
 }
 
-func writeConfigToFile(filename string, data []byte) {
-	file, _ := os.Create(filename)
+func writeConfigToFile(filename string, data []byte) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
 	defer file.Close()
 	file.WriteString(string(data))
+	return nil
 }
