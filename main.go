@@ -1,0 +1,130 @@
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"os"
+
+	"github.com/alecthomas/kingpin/v2"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
+	"github.com/oklog/run"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+)
+
+var (
+	version = "dev"
+)
+
+func main() {
+	var logger log.Logger
+	logger = log.NewLogfmtLogger(os.Stdout)
+
+	app := kingpin.New("dockerswarm-configs-provider", "")
+	logger = log.NewLogfmtLogger(os.Stderr)
+
+	outputDir := app.Flag("output-dir", "directory for the configs").Default("out").String()
+	outputExt := app.Flag("output-ext", "extension for the configs").Default("yaml").String()
+
+	if _, err := app.Parse(os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stdout, err)
+		os.Exit(2)
+	}
+
+	level.Info(logger).Log("msg", "Starting dockerswarm-configs-provider", "version", version)
+
+	var (
+		g           run.Group
+		ctx, cancel = context.WithCancel(context.Background())
+	)
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		panic(err)
+	}
+
+	// On startup, remove all existing files in the output directory
+	{
+		files, _ := os.ReadDir(*outputDir)
+		for _, file := range files {
+			if file.IsDir() {
+				continue
+			}
+			if err := os.Remove(fmt.Sprintf("%s/%s", *outputDir, file.Name())); err != nil {
+				level.Error(logger).Log("msg", "Failed to remove file", "file", file.Name(), "err", err)
+			}
+		}
+	}
+
+	{
+		level.Info(logger).Log("msg", "Processing existing configs")
+		configs, err := cli.ConfigList(ctx, types.ConfigListOptions{})
+		if err != nil {
+			panic(err)
+		}
+		for _, config := range configs {
+			cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ID)
+			if err != nil {
+				continue
+			}
+			outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
+			level.Info(logger).Log("msg", "Write config to file", "id", config.ID, "name", config.Spec.Name, "file", outFile)
+			writeConfigToFile(outFile, cfg.Spec.Data)
+		}
+	}
+
+	// Subscribe to Docker events for configs
+	level.Info(logger).Log("msg", "Subscribing to Docker events")
+	g.Add(func() error {
+		filters := filters.NewArgs()
+		filters.Add("type", "config")
+
+		events, errCh := cli.Events(ctx, events.ListOptions{
+			Filters: filters,
+		})
+
+		for {
+			select {
+			case event := <-events:
+				switch event.Action {
+				case "create", "update":
+					cfg, _, err := cli.ConfigInspectWithRaw(ctx, event.Actor.ID)
+					if err != nil {
+						level.Error(logger).Log("msg", "Failed to read config", "id", event.Actor.ID, "err", err)
+						continue
+					}
+					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
+					writeConfigToFile(outFile, cfg.Spec.Data)
+				case "remove":
+					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, event.Actor.ID, *outputExt)
+					if err := os.Remove(outFile); err != nil {
+						level.Error(logger).Log("msg", "Failed to remove file", "id", event.Actor.ID, "file", outFile, "err", err)
+					}
+				}
+				level.Info(logger).Log("msg", "Event triggered", "type", event.Type, "action", event.Action)
+			case err := <-errCh:
+				level.Error(logger).Log("msg", "Failed to receive Docker events", "err", err)
+			}
+		}
+
+	}, func(error) {
+		cancel()
+		cli.Close()
+	})
+
+	if err := g.Run(); err != nil {
+		level.Error(logger).Log("msg", "Failed to run", "err", err)
+		os.Exit(1)
+	}
+}
+
+func writeConfigToFile(filename string, data []byte) {
+	file, _ := os.Create(filename)
+	defer file.Close()
+	file.WriteString(string(data))
+}
