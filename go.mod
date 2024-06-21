@@ -1,4 +1,4 @@
-module github.com/swarmlibs/dockerswarm-configs-provider
+module github.com/swarmlibs/prometheus-configs-provider
 
 go 1.22.3
 

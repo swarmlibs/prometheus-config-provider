@@ -21,13 +21,16 @@ import (
 
 var (
 	version = "dev"
+
+	defaultPrometheusScrapeConfigLabel = "io.prometheus.scrape_config"
 )
 
 func main() {
-	app := kingpin.New("dockerswarm-configs-provider", "")
+	app := kingpin.New("prometheus-configs-provider", "")
 
-	outputDir := app.Flag("output-dir", "directory for the configs").Default("out").String()
+	outputDir := app.Flag("output-dir", "directory for the configs").Default("output").String()
 	outputExt := app.Flag("output-ext", "extension for the configs").Default("yaml").String()
+	prometheusScrapeConfigLabel := app.Flag("prometheus-scrape-config-label", "label to identify prometheus scrape configs").Default(defaultPrometheusScrapeConfigLabel).String()
 
 	var logger log.Logger
 	logger = log.NewLogfmtLogger(os.Stdout)
@@ -40,7 +43,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	level.Info(logger).Log("msg", "Starting dockerswarm-configs-provider", "version", version)
+	level.Info(logger).Log("msg", "Starting prometheus-configs-provider", "version", version)
 
 	var (
 		g           run.Group
@@ -50,6 +53,15 @@ func main() {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		panic(err)
+	}
+
+	// Check if outputDir exists, if not create it
+	if _, err := os.Stat(*outputDir); os.IsNotExist(err) {
+		level.Info(logger).Log("msg", "Creating output directory")
+		if err := os.Mkdir(*outputDir, 0755); err != nil {
+			level.Error(logger).Log("msg", "Failed to create output directory", "err", err)
+			os.Exit(1)
+		}
 	}
 
 	// On startup, remove all existing files in the output directory
@@ -76,8 +88,14 @@ func main() {
 		for _, config := range configs {
 			cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ID)
 			if err != nil {
+				level.Error(logger).Log("msg", "Failed to read config", "id", config.ID, "err", err)
 				continue
 			}
+
+			if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
+				continue
+			}
+
 			outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
 			level.Info(logger).Log("msg", "Event triggered", "type", "read", "id", config.ID, "file", outFile)
 			writeConfigToFile(outFile, cfg.Spec.Data)
@@ -106,7 +124,7 @@ func main() {
 						continue
 					}
 
-					if cfg.Spec.Labels["io.prometheus.scrape_config"] == "" {
+					if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
 						continue
 					}
 
