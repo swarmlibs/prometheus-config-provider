@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"os"
 
@@ -64,6 +65,7 @@ func main() {
 				level.Error(logger).Log("msg", "Failed to remove file", "file", file.Name(), "err", err)
 			}
 		}
+		time.Sleep(1 * time.Second)
 	}
 
 	{
@@ -81,6 +83,7 @@ func main() {
 			level.Info(logger).Log("msg", "Event triggered", "type", "read", "id", config.ID, "file", outFile)
 			writeConfigToFile(outFile, cfg.Spec.Data)
 		}
+		time.Sleep(5 * time.Second)
 	}
 
 	// Subscribe to Docker events for configs
