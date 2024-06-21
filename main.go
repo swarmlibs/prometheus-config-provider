@@ -62,10 +62,7 @@ func main() {
 			level.Error(logger).Log("msg", "Failed to create output directory", "err", err)
 			os.Exit(1)
 		}
-	}
-
-	// On startup, remove all existing files in the output directory
-	{
+	} else {
 		level.Info(logger).Log("msg", "Cleaning up existing files in output directory")
 		files, _ := os.ReadDir(*outputDir)
 		for _, file := range files {
@@ -104,7 +101,7 @@ func main() {
 	}
 
 	// Subscribe to Docker events for configs
-	level.Info(logger).Log("msg", "Subscribing to Docker events")
+	level.Info(logger).Log("msg", "Subscribing to real-time events from the Docker daemon")
 
 	filters := filters.NewArgs()
 	filters.Add("type", "config")
