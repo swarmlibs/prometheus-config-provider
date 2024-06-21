@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os/signal"
+	"syscall"
 
 	"os"
 
@@ -52,6 +54,7 @@ func main() {
 
 	// On startup, remove all existing files in the output directory
 	{
+		level.Info(logger).Log("msg", "Cleaning up existing files in output directory")
 		files, _ := os.ReadDir(*outputDir)
 		for _, file := range files {
 			if file.IsDir() {
@@ -64,7 +67,7 @@ func main() {
 	}
 
 	{
-		level.Info(logger).Log("msg", "Processing existing configs")
+		level.Info(logger).Log("msg", "Generating files from existing list of configs")
 		configs, err := cli.ConfigList(ctx, types.ConfigListOptions{})
 		if err != nil {
 			panic(err)
@@ -75,21 +78,20 @@ func main() {
 				continue
 			}
 			outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
-			level.Info(logger).Log("msg", "Load triggered", "id", config.ID, "file", outFile)
+			level.Info(logger).Log("msg", "Event triggered", "type", "read", "id", config.ID, "file", outFile)
 			writeConfigToFile(outFile, cfg.Spec.Data)
 		}
 	}
 
 	// Subscribe to Docker events for configs
 	level.Info(logger).Log("msg", "Subscribing to Docker events")
+
+	filters := filters.NewArgs()
+	filters.Add("type", "config")
+	events, errCh := cli.Events(ctx, events.ListOptions{
+		Filters: filters,
+	})
 	g.Add(func() error {
-		filters := filters.NewArgs()
-		filters.Add("type", "config")
-
-		events, errCh := cli.Events(ctx, events.ListOptions{
-			Filters: filters,
-		})
-
 		for {
 			select {
 			case event := <-events:
@@ -122,13 +124,25 @@ func main() {
 				}
 			case err := <-errCh:
 				level.Error(logger).Log("msg", "Failed to receive Docker events", "err", err)
+				return err
 			}
 		}
-
 	}, func(error) {
-		cancel()
 		cli.Close()
+		cancel()
 	})
+
+	term := make(chan os.Signal, 1)
+	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
+	g.Add(func() error {
+		select {
+		case <-term:
+			level.Info(logger).Log("msg", "Received SIGTERM, exiting gracefully...")
+		case <-ctx.Done():
+		}
+
+		return nil
+	}, func(error) {})
 
 	if err := g.Run(); err != nil {
 		level.Error(logger).Log("msg", "Failed to run", "err", err)
