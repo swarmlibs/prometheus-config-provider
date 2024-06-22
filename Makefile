@@ -42,5 +42,8 @@ build: clean prometheus-configs-provider
 prometheus-configs-provider:
 	$(GO_BUILD_RECIPE) -o bin/$@
 
+run:
+	go run main.go --output-dir=./output
+
 clean:
 	rm -rf bin
