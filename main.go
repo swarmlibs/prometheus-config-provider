@@ -104,7 +104,7 @@ func main() {
 			}
 
 			outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
-			level.Info(logger).Log("msg", "Event triggered", "type", "read", "id", config.ID, "file", outFile)
+			level.Info(logger).Log("msg", "Event triggered", "action", "read", "id", config.ID, "name", config.Spec.Name, "file", outFile)
 			writeConfigToFile(outFile, cfg.Spec.Data)
 		}
 		time.Sleep(1 * time.Second)
@@ -127,7 +127,7 @@ func main() {
 					cfg, _, err := cli.ConfigInspectWithRaw(ctx, event.Actor.ID)
 
 					if err != nil {
-						level.Error(logger).Log("msg", "Failed to read config", "id", event.Actor.ID, "err", err)
+						level.Error(logger).Log("msg", "Failed to read config", "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "err", err)
 						continue
 					}
 
@@ -136,16 +136,16 @@ func main() {
 					}
 
 					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
-					level.Info(logger).Log("msg", "Event triggered", "type", event.Type, "action", event.Action, "id", event.Actor.ID, "file", outFile)
+					level.Info(logger).Log("msg", "Event triggered", "action", event.Action, "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
 
 					writeConfigToFile(outFile, cfg.Spec.Data)
 				case "remove":
 					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, event.Actor.ID, *outputExt)
 
 					if _, err := os.Stat(outFile); err == nil {
-						level.Info(logger).Log("msg", "Event triggered", "type", event.Type, "action", event.Action, "id", event.Actor.ID, "file", outFile)
+						level.Info(logger).Log("msg", "Event triggered", "action", event.Action, "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
 						if err := os.Remove(outFile); err != nil {
-							level.Error(logger).Log("msg", "Failed to remove file", "id", event.Actor.ID, "file", outFile, "err", err)
+							level.Error(logger).Log("msg", "Failed to remove file", "id", event.Actor.ID, "file", outFile, "name", event.Actor.Attributes["name"], "err", err)
 						}
 					}
 				}
