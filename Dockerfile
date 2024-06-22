@@ -18,11 +18,11 @@ RUN --mount=type=bind,target=/app,source=. <<EOT
     cd /app
     BUILD_DATE=$(date +"%Y%m%d-%T")
     go build go build -ldflags="-s \
-	-X $(PROMETHEUS_COMMON_PKG)/version.Revision=${GITHUB_SHA} \
-	-X $(PROMETHEUS_COMMON_PKG)/version.BuildUser=${GITHUB_ACTOR} \
-	-X $(PROMETHEUS_COMMON_PKG)/version.BuildDate=${BUILD_DATE} \
-	-X $(PROMETHEUS_COMMON_PKG)/version.Branch=${GITHUB_BASE_REF} \
-	-X $(PROMETHEUS_COMMON_PKG)/version.Version=${DOCKER_META_VERSION} \
+	-X ${PROMETHEUS_COMMON_PKG}/version.Revision=${GITHUB_SHA} \
+	-X ${PROMETHEUS_COMMON_PKG}/version.BuildUser=${GITHUB_ACTOR} \
+	-X ${PROMETHEUS_COMMON_PKG}/version.BuildDate=${BUILD_DATE} \
+	-X ${PROMETHEUS_COMMON_PKG}/version.Branch=${GITHUB_BASE_REF} \
+	-X ${PROMETHEUS_COMMON_PKG}/version.Version=${DOCKER_META_VERSION} \
     "
     -o /prometheus-configs-provider
 EOT
