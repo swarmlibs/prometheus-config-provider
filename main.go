@@ -12,6 +12,8 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/oklog/run"
+	"github.com/prometheus-operator/prometheus-operator/pkg/versionutil"
+	"github.com/prometheus/common/version"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
@@ -20,8 +22,6 @@ import (
 )
 
 var (
-	version = "dev"
-
 	defaultOutputDir                   = "/etc/prometheus/configs"
 	defaultOuputExt                    = "yaml"
 	defaultPrometheusScrapeConfigLabel = "io.prometheus.scrape_config"
@@ -40,12 +40,20 @@ func main() {
 	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 	logger = log.With(logger, "caller", log.DefaultCaller)
 
+	versionutil.RegisterIntoKingpinFlags(app)
+
+	if versionutil.ShouldPrintVersion() {
+		versionutil.Print(os.Stdout, "prometheus-config-reloader")
+		os.Exit(0)
+	}
+
 	if _, err := app.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stdout, err)
 		os.Exit(2)
 	}
 
-	level.Info(logger).Log("msg", "Starting prometheus-configs-provider", "version", version)
+	level.Info(logger).Log("msg", "Starting prometheus-configs-provider", "version", version.Info())
+	level.Info(logger).Log("build_context", version.BuildContext())
 
 	var (
 		g           run.Group
