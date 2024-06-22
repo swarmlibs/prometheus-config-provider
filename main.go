@@ -22,14 +22,16 @@ import (
 var (
 	version = "dev"
 
+	defaultOutputDir                   = "/etc/prometheus/configs"
+	defaultOuputExt                    = "yaml"
 	defaultPrometheusScrapeConfigLabel = "io.prometheus.scrape_config"
 )
 
 func main() {
 	app := kingpin.New("prometheus-configs-provider", "")
 
-	outputDir := app.Flag("output-dir", "directory for the configs").Default("output").String()
-	outputExt := app.Flag("output-ext", "extension for the configs").Default("yaml").String()
+	outputDir := app.Flag("output-dir", "directory for the configs").Default(defaultOutputDir).String()
+	outputExt := app.Flag("output-ext", "extension for the configs").Default(defaultOuputExt).String()
 	prometheusScrapeConfigLabel := app.Flag("prometheus-scrape-config-label", "label to identify prometheus scrape configs").Default(defaultPrometheusScrapeConfigLabel).String()
 
 	var logger log.Logger
