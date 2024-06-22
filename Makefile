@@ -1,6 +1,8 @@
 SHELL=/usr/bin/env bash -o pipefail
 VERSION?=$(shell cat VERSION | tr -d " \t\n\r")
 
+PROMETHEUS_COMMON_PKG=github.com/prometheus/common
+
 BUILD_DATE=$(shell date +"%Y%m%d-%T")
 # source: https://docs.github.com/en/free-pro-team@latest/actions/reference/environment-variables#default-environment-variables
 ifndef GITHUB_ACTIONS

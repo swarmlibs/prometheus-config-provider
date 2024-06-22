@@ -5,8 +5,27 @@ ARG TARGETOS="linux"
 ARG TARGETARCH="amd64"
 
 FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS builder
-RUN --mount=type=bind,target=/app,source=. \
-    cd /app && go build -o /prometheus-configs-provider
+
+ARG DOCKER_META_VERSION=
+ARG GITHUB_SHA=
+ARG GITHUB_ACTOR=
+ARG BUILD_DATE=
+ARG GITHUB_BASE_REF=
+
+ENV PROMETHEUS_COMMON_PKG=github.com/prometheus/common
+
+RUN --mount=type=bind,target=/app,source=. <<EOT
+    cd /app
+    BUILD_DATE=$(date +"%Y%m%d-%T")
+    go build go build -ldflags="-s \
+	-X $(PROMETHEUS_COMMON_PKG)/version.Revision=${GITHUB_SHA} \
+	-X $(PROMETHEUS_COMMON_PKG)/version.BuildUser=${GITHUB_ACTOR} \
+	-X $(PROMETHEUS_COMMON_PKG)/version.BuildDate=${BUILD_DATE} \
+	-X $(PROMETHEUS_COMMON_PKG)/version.Branch=${GITHUB_BASE_REF} \
+	-X $(PROMETHEUS_COMMON_PKG)/version.Version=${DOCKER_META_VERSION} \
+    "
+    -o /prometheus-configs-provider
+EOT
 
 FROM quay.io/prometheus/busybox-${TARGETOS}-${TARGETARCH}:latest
 COPY --from=builder /prometheus-configs-provider /bin/prometheus-configs-provider
