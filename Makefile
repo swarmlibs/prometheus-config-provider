@@ -41,6 +41,3 @@ prometheus-configs-provider:
 
 clean:
 	rm -rf bin
-
-docker-build:
-	docker buildx bake local --load
