@@ -1,6 +1,5 @@
 ARG GO_VERSION
 ARG ALPINE_VERSION
-
 ARG TARGETOS="linux"
 ARG TARGETARCH="amd64"
 
@@ -12,13 +11,14 @@ ARG GITHUB_ACTOR=
 ARG BUILD_DATE=
 ARG GITHUB_BASE_REF=
 
-ENV PROMETHEUS_COMMON_PKG=github.com/prometheus/common
-
 RUN --mount=type=bind,target=/app,source=. <<EOT
     cd /app
-    BUILD_DATE=$(date +"%Y%m%d-%T")
-    go mod tidy -v
-    go build go build -ldflags="-s \
+    export PROMETHEUS_COMMON_PKG=github.com/prometheus/common
+    export BUILD_DATE=$(date +"%Y%m%d-%T")
+    export GOOS=${TARGETOS}
+    export GOARCH=${TARGETARCH}
+    export CGO_ENABLED=0
+    go build -ldflags="-s \
         -X ${PROMETHEUS_COMMON_PKG}/version.Revision=${GITHUB_SHA} \
         -X ${PROMETHEUS_COMMON_PKG}/version.BuildUser=${GITHUB_ACTOR} \
         -X ${PROMETHEUS_COMMON_PKG}/version.BuildDate=${BUILD_DATE} \

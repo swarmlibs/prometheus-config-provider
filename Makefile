@@ -30,11 +30,14 @@ GO_BUILD_RECIPE=\
 	CGO_ENABLED=0 \
 	go build -ldflags="$(GO_BUILD_LDFLAGS)"
 
-make: tidy clean prometheus-configs-provider
+make: tidy
 
-.PHONY: tidy prometheus-configs-provider
+.PHONY: tidy
 tidy:
 	go mod tidy -v
+
+.PHONY: build
+build: clean prometheus-configs-provider
 
 prometheus-configs-provider:
 	$(GO_BUILD_RECIPE) -o bin/$@
