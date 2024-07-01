@@ -11,6 +11,22 @@ This is a simple tool that reads the Docker API and generates Prometheus scrape 
   <img src="https://github.com/swarmlibs/prometheus-configs-provider/assets/4363857/d439c204-fec4-492a-99f7-20df95ae1217">
 </picture>
 
+## Usage
+
+```sh
+usage: prometheus-configs-provider [<flags>]
+
+Flags:
+  --[no-]help           Show context-sensitive help (also try --help-long and --help-man).
+  --output-dir="/etc/prometheus/configs"  
+                        directory for the configs
+  --output-ext="yaml"   extension for the configs
+  --prometheus-scrape-config-label="io.prometheus.scrape_config"  
+                        label to identify prometheus scrape configs
+  --[no-]version        Prints current version.
+  --[no-]short-version  Print just the version number.
+```
+
 ## Example
 
 ```yaml
