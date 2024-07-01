@@ -1,3 +1,6 @@
+> [!NOTE]
+> The repository has been renamed from `prometheus-configs-provider` to `prometheus-config-provider`.
+
 ## About
 
 This is a simple tool that reads the Docker API and generates Prometheus scrape configs for all Docker configs that have the `io.prometheus.scrape_config` label set to `true`.
