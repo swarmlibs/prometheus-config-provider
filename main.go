@@ -32,6 +32,7 @@ func main() {
 
 	outputDir := app.Flag("output-dir", "directory for the configs").Default(defaultOutputDir).String()
 	outputExt := app.Flag("output-ext", "extension for the configs").Default(defaultOuputExt).String()
+	keepExisting := app.Flag("keep-existing", "keep existing files in output directory").Bool()
 	prometheusScrapeConfigLabel := app.Flag("prometheus-scrape-config-label", "label to identify prometheus scrape configs").Default(defaultPrometheusScrapeConfigLabel).String()
 
 	var logger log.Logger
@@ -73,17 +74,21 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		level.Info(logger).Log("msg", "Cleaning up existing files in output directory")
-		files, _ := os.ReadDir(*outputDir)
-		for _, file := range files {
-			if file.IsDir() {
-				continue
+		if !*keepExisting {
+			level.Info(logger).Log("msg", "Cleaning up existing files in output directory")
+			files, _ := os.ReadDir(*outputDir)
+			for _, file := range files {
+				if file.IsDir() {
+					continue
+				}
+				if err := os.Remove(fmt.Sprintf("%s/%s", *outputDir, file.Name())); err != nil {
+					level.Error(logger).Log("msg", "Failed to remove file", "file", file.Name(), "err", err)
+				}
 			}
-			if err := os.Remove(fmt.Sprintf("%s/%s", *outputDir, file.Name())); err != nil {
-				level.Error(logger).Log("msg", "Failed to remove file", "file", file.Name(), "err", err)
-			}
+			time.Sleep(1 * time.Second)
+		} else {
+			level.Info(logger).Log("msg", "Keeping existing files in output directory")
 		}
-		time.Sleep(1 * time.Second)
 	}
 
 	{
