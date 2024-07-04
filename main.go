@@ -189,5 +189,6 @@ func writeConfigToFile(filename string, data []byte) error {
 	}
 	defer file.Close()
 	file.WriteString(string(data))
+	file.Chmod(0777)
 	return nil
 }
