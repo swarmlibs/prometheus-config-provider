@@ -47,3 +47,6 @@ run:
 
 clean:
 	rm -rf bin
+
+docker:
+	docker buildx bake --load local

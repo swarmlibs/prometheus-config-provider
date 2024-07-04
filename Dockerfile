@@ -4,7 +4,6 @@ ARG ALPINE_VERSION
 # buildkit
 ARG TARGETOS="linux"
 ARG TARGETARCH="amd64"
-ARG BUILDPLATFORM="linux/amd64"
 
 # docker-metadata-action
 ARG DOCKER_META_VERSION=

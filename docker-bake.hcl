@@ -5,7 +5,7 @@ target "docker-metadata-action" {}
 target "github-metadata-action" {}
 
 target "default" {
-    inherits = [ "prometheus-configs-provider" ]
+    inherits = [ "prometheus-config-provider" ]
     platforms = [
         "linux/amd64",
         "linux/arm64"
@@ -13,11 +13,11 @@ target "default" {
 }
 
 target "local" {
-    inherits = [ "prometheus-configs-provider" ]
-    tags = [ "swarmlibs/prometheus-configs-provider:local" ]
+    inherits = [ "prometheus-config-provider" ]
+    tags = [ "swarmlibs/prometheus-config-provider:local" ]
 }
 
-target "prometheus-configs-provider" {
+target "prometheus-config-provider" {
     context = "."
     dockerfile = "Dockerfile"
     inherits = [
