@@ -40,3 +40,7 @@ configs:
 ```
 
 With the help of the [prometheus-operator/prometheus-operator/tree/main/cmd/prometheus-config-reloader](https://github.com/prometheus-operator/prometheus-operator/tree/main/cmd/prometheus-config-reloader) tool, we can automatically reload the Prometheus configuration when the Docker configs are create/update/remove.
+
+## License
+
+Licensed under [MIT](./LICENSE).
