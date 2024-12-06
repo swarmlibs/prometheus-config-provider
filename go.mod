@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
-	github.com/docker/docker v27.0.0+incompatible
+	github.com/docker/docker v27.3.1+incompatible
 	github.com/go-kit/log v0.2.1
 	github.com/oklog/run v1.1.0
 	github.com/prometheus-operator/prometheus-operator v0.74.0
