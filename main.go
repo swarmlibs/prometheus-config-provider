@@ -125,36 +125,37 @@ func main() {
 					// If it does, we need to check the previous spec for configs
 					// and remove them if they don't exist in the current spec
 					if service.PreviousSpec != nil {
+					prevConfigLoop:
 						for _, prevConfig := range service.PreviousSpec.TaskTemplate.ContainerSpec.Configs {
+							// Check if the config exists in the current spec
 							for _, config := range service.Spec.TaskTemplate.ContainerSpec.Configs {
-								// Skip if config is not being updated
 								if prevConfig.ConfigID == config.ConfigID {
-									continue
+									continue prevConfigLoop
 								}
+							}
 
-								cfg, _, err := cli.ConfigInspectWithRaw(ctx, prevConfig.ConfigID)
-								if err != nil {
-									level.Error(logger).Log("msg", "Failed to read config", "id", prevConfig.ConfigID, "err", err)
-									continue
-								}
+							cfg, _, err := cli.ConfigInspectWithRaw(ctx, prevConfig.ConfigID)
+							if err != nil {
+								level.Error(logger).Log("msg", "Failed to read config", "id", prevConfig.ConfigID, "err", err)
+								continue
+							}
 
-								if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
-									continue
-								}
+							if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
+								continue
+							}
 
-								configName := cfg.Spec.Name
-								if cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"] != "" {
-									configName = cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"]
-								}
+							configName := cfg.Spec.Name
+							if cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"] != "" {
+								configName = cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"]
+							}
 
-								// Prepare the output file name
-								outFile := fmt.Sprintf("%s/%s.%s", *outputDir, configName, *outputExt)
+							// Prepare the output file name
+							outFile := fmt.Sprintf("%s/%s.%s", *outputDir, configName, *outputExt)
 
-								// Remove the config file if exists in the output directory
-								if _, err := os.Stat(outFile); err == nil {
-									os.Remove(outFile)
-									level.Info(logger).Log("msg", "Removing config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
-								}
+							// Remove the config file if exists in the output directory
+							if _, err := os.Stat(outFile); err == nil {
+								os.Remove(outFile)
+								level.Info(logger).Log("msg", "Removing config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
 							}
 						}
 					}
