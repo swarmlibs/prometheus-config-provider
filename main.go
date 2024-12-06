@@ -134,10 +134,9 @@ func main() {
 							outFile := fmt.Sprintf("%s/%s.%s", *outputDir, configName, *outputExt)
 
 							// Remove the config file if exists in the output directory
-							if err := deleteConfigFile(outFile); err != nil {
-								level.Error(logger).Log("msg", "Failed to remove config file", "file", outFile, "err", err)
+							if err := deleteConfigFile(outFile); err == nil {
+								level.Info(logger).Log("msg", "Removing config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
 							}
-							level.Info(logger).Log("msg", "Removing config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
 						}
 					}
 
