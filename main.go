@@ -136,7 +136,7 @@ func main() {
 
 							cfg, _, err := cli.ConfigInspectWithRaw(ctx, prevConfig.ConfigID)
 							if err != nil {
-								level.Error(logger).Log("msg", "Failed to read config", "id", prevConfig.ConfigID, "err", err)
+								level.Error(logger).Log("msg", "Failed to read config", "type", "service", "id", prevConfig.ConfigID, "err", err)
 								continue
 							}
 
@@ -155,7 +155,7 @@ func main() {
 							// Remove the config file if exists in the output directory
 							if _, err := os.Stat(outFile); err == nil {
 								os.Remove(outFile)
-								level.Info(logger).Log("msg", "Removing config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
+								level.Info(logger).Log("msg", "Removing config", "type", "service", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
 							}
 						}
 					}
@@ -164,7 +164,7 @@ func main() {
 					for _, config := range service.Spec.TaskTemplate.ContainerSpec.Configs {
 						cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ConfigID)
 						if err != nil {
-							level.Error(logger).Log("msg", "Failed to read config", "id", config.ConfigID, "err", err)
+							level.Error(logger).Log("msg", "Failed to read config", "type", "service", "id", config.ConfigID, "err", err)
 							continue
 						}
 
@@ -185,7 +185,7 @@ func main() {
 						// Write the config to file if it doesn't exist
 						if _, err := os.Stat(outFile); os.IsNotExist(err) {
 							writeConfigToFile(outFile, cfg.Spec.Data)
-							level.Info(logger).Log("msg", "Creating config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
+							level.Info(logger).Log("msg", "Creating config", "type", "service", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
 						}
 					}
 				}
@@ -219,7 +219,7 @@ func main() {
 					// Remove the config file if exists in the output directory
 					if _, err := os.Stat(outFile); err == nil {
 						os.Remove(outFile)
-						level.Info(logger).Log("msg", "Removing config", "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
+						level.Info(logger).Log("msg", "Removing config", "type", "event", "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
 					}
 				}
 			case err := <-errCh:
