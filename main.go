@@ -16,6 +16,8 @@ import (
 	"github.com/prometheus/common/version"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 )
 
@@ -95,7 +97,16 @@ func main() {
 	}
 
 	// Run the main loop
-	quit := make(chan struct{})
+	mainCh := make(chan struct{})
+	g.Add(func() error {
+		<-mainCh
+		cancel()
+		cli.Close()
+		return nil
+	}, func(error) {})
+
+	// Run the ticker to evaluate service configs
+	serviceCh := make(chan struct{})
 	g.Add(func() error {
 		ticker := time.NewTicker(*evaluationInterval)
 		for {
@@ -177,22 +188,52 @@ func main() {
 						}
 					}
 				}
-
-			case <-quit:
+			case <-serviceCh:
 				ticker.Stop()
 				return nil
 			}
 		}
-	}, func(error) {
-		cli.Close()
-		cancel()
-	})
+	}, func(error) {})
+
+	// Subscribe to Docker events for configs
+	g.Add(func() error {
+		filters := filters.NewArgs()
+		filters.Add("type", "config")
+		events, errCh := cli.Events(ctx, events.ListOptions{
+			Filters: filters,
+		})
+
+		for {
+			select {
+			case event := <-events:
+				switch event.Action {
+				case "remove":
+					configName := event.Actor.Attributes["name"]
+					if event.Actor.Attributes[*prometheusScrapeConfigLabel+".name"] != "" {
+						configName = event.Actor.Attributes[*prometheusScrapeConfigLabel+".name"]
+					}
+
+					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, configName, *outputExt)
+
+					// Remove the config file if exists in the output directory
+					if _, err := os.Stat(outFile); err == nil {
+						os.Remove(outFile)
+						level.Info(logger).Log("msg", "Removing config", "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
+					}
+				}
+			case err := <-errCh:
+				level.Error(logger).Log("msg", "Failed to receive Docker events", "err", err)
+				return err
+			}
+		}
+	}, func(error) {})
 
 	// Handle Interrupt & SIGTERM signals
 	g.Add(func() error {
 		select {
 		case <-term:
-			close(quit)
+			close(mainCh)
+			close(serviceCh)
 			level.Info(logger).Log("msg", "Received SIGTERM, exiting gracefully...")
 		case <-ctx.Done():
 		}
