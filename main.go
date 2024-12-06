@@ -110,7 +110,38 @@ func main() {
 
 				// Loop through all services and get the configs
 				for _, service := range services {
-					// Get the service configs from the task template
+					// Check if the service has a previous spec
+					// If it does, we need to check the previous spec for configs
+					// and remove them if they don't exist in the current spec
+					if service.PreviousSpec != nil {
+						for _, config := range service.PreviousSpec.TaskTemplate.ContainerSpec.Configs {
+							cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ConfigID)
+							if err != nil {
+								level.Error(logger).Log("msg", "Failed to read config", "id", config.ConfigID, "err", err)
+								continue
+							}
+
+							if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
+								continue
+							}
+
+							configName := cfg.Spec.Name
+							if cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"] != "" {
+								configName = cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"]
+							}
+
+							// Prepare the output file name
+							outFile := fmt.Sprintf("%s/%s.%s", *outputDir, configName, *outputExt)
+
+							// Write the config to file if it doesn't exist
+							if _, err := os.Stat(outFile); os.IsNotExist(err) {
+								deleteConfigFile(outFile)
+								level.Info(logger).Log("msg", "Removing config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
+							}
+						}
+					}
+
+					// Get the service configs from the current task template
 					for _, config := range service.Spec.TaskTemplate.ContainerSpec.Configs {
 						cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ConfigID)
 						if err != nil {
@@ -177,4 +208,11 @@ func writeConfigToFile(filename string, data []byte) error {
 	file.WriteString(string(data))
 	file.Chmod(0777)
 	return nil
+}
+
+func deleteConfigFile(filename string) error {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil
+	}
+	return os.Remove(filename)
 }
