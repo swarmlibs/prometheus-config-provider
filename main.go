@@ -16,8 +16,6 @@ import (
 	"github.com/prometheus/common/version"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 )
 
@@ -25,14 +23,19 @@ var (
 	defaultOutputDir                   = "/etc/prometheus/configs"
 	defaultOuputExt                    = "yaml"
 	defaultPrometheusScrapeConfigLabel = "io.prometheus.scrape_config"
+	defaultEvaluationInterval          = 15 * time.Second
 )
 
 func main() {
+	term := make(chan os.Signal, 1)
+	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
+
 	app := kingpin.New("prometheus-configs-provider", "")
 
 	outputDir := app.Flag("output-dir", "directory for the configs").Default(defaultOutputDir).String()
 	outputExt := app.Flag("output-ext", "extension for the configs").Default(defaultOuputExt).String()
 	keepExisting := app.Flag("keep-existing", "keep existing files in output directory").Bool()
+	evaluationInterval := app.Flag("evaluation_interval", "How frequently to evaluate service configs").Default(defaultEvaluationInterval.String()).Duration()
 	prometheusScrapeConfigLabel := app.Flag("prometheus-scrape-config-label", "label to identify prometheus scrape configs").Default(defaultPrometheusScrapeConfigLabel).String()
 
 	var logger log.Logger
@@ -91,72 +94,55 @@ func main() {
 		}
 	}
 
-	{
-		level.Info(logger).Log("msg", "Generating files from existing list of configs")
-		configs, err := cli.ConfigList(ctx, types.ConfigListOptions{})
-		if err != nil {
-			panic(err)
-		}
-		for _, config := range configs {
-			cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ID)
-			if err != nil {
-				level.Error(logger).Log("msg", "Failed to read config", "id", config.ID, "err", err)
-				continue
-			}
-
-			if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
-				continue
-			}
-
-			outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
-			level.Info(logger).Log("msg", "Event triggered", "action", "read", "id", config.ID, "name", config.Spec.Name, "file", outFile)
-			writeConfigToFile(outFile, cfg.Spec.Data)
-		}
-		time.Sleep(1 * time.Second)
-	}
-
-	// Subscribe to Docker events for configs
-	level.Info(logger).Log("msg", "Subscribing to real-time events from the Docker daemon")
-
-	filters := filters.NewArgs()
-	filters.Add("type", "config")
-	events, errCh := cli.Events(ctx, events.ListOptions{
-		Filters: filters,
-	})
+	// Run the main loop
+	quit := make(chan struct{})
 	g.Add(func() error {
+		ticker := time.NewTicker(*evaluationInterval)
 		for {
 			select {
-			case event := <-events:
-				switch event.Action {
-				case "create", "update":
-					cfg, _, err := cli.ConfigInspectWithRaw(ctx, event.Actor.ID)
+			case <-ticker.C:
+				// Get all services
+				services, err := cli.ServiceList(ctx, types.ServiceListOptions{})
+				if err != nil {
+					level.Error(logger).Log("msg", "Failed to list services", "err", err)
+					os.Exit(1)
+				}
 
-					if err != nil {
-						level.Error(logger).Log("msg", "Failed to read config", "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "err", err)
-						continue
-					}
+				// Loop through all services and get the configs
+				for _, service := range services {
+					// Get the service configs from the task template
+					for _, config := range service.Spec.TaskTemplate.ContainerSpec.Configs {
+						cfg, _, err := cli.ConfigInspectWithRaw(ctx, config.ConfigID)
+						if err != nil {
+							level.Error(logger).Log("msg", "Failed to read config", "id", config.ConfigID, "err", err)
+							continue
+						}
 
-					if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
-						continue
-					}
+						if cfg.Spec.Labels[*prometheusScrapeConfigLabel] == "" {
+							continue
+						}
 
-					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, cfg.ID, *outputExt)
-					level.Info(logger).Log("msg", "Event triggered", "action", event.Action, "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
+						// Ability to override the config name with a label
+						// e.g. io.prometheus.scrape_config.name
+						configName := cfg.Spec.Name
+						if cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"] != "" {
+							configName = cfg.Spec.Labels[*prometheusScrapeConfigLabel+".name"]
+						}
 
-					writeConfigToFile(outFile, cfg.Spec.Data)
-				case "remove":
-					outFile := fmt.Sprintf("%s/%s.%s", *outputDir, event.Actor.ID, *outputExt)
+						// Prepare the output file name
+						outFile := fmt.Sprintf("%s/%s.%s", *outputDir, configName, *outputExt)
 
-					if _, err := os.Stat(outFile); err == nil {
-						level.Info(logger).Log("msg", "Event triggered", "action", event.Action, "id", event.Actor.ID, "name", event.Actor.Attributes["name"], "file", outFile)
-						if err := os.Remove(outFile); err != nil {
-							level.Error(logger).Log("msg", "Failed to remove file", "id", event.Actor.ID, "file", outFile, "name", event.Actor.Attributes["name"], "err", err)
+						// Write the config to file if it doesn't exist
+						if _, err := os.Stat(outFile); os.IsNotExist(err) {
+							writeConfigToFile(outFile, cfg.Spec.Data)
+							level.Info(logger).Log("msg", "Creating config", "id", cfg.ID, "name", cfg.Spec.Name, "file", outFile)
 						}
 					}
 				}
-			case err := <-errCh:
-				level.Error(logger).Log("msg", "Failed to receive Docker events", "err", err)
-				return err
+
+			case <-quit:
+				ticker.Stop()
+				return nil
 			}
 		}
 	}, func(error) {
@@ -164,11 +150,11 @@ func main() {
 		cancel()
 	})
 
-	term := make(chan os.Signal, 1)
-	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
+	// Handle Interrupt & SIGTERM signals
 	g.Add(func() error {
 		select {
 		case <-term:
+			close(quit)
 			level.Info(logger).Log("msg", "Received SIGTERM, exiting gracefully...")
 		case <-ctx.Done():
 		}
